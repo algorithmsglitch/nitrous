@@ -2,9 +2,111 @@
 
 ## Sprint 2 Work Completed
 
-## Frontend Testing Section (To Be Updated)
-- Cypress test(s): Pending.
-- Frontend unit tests: Pending.
+## Frontend Testing
+
+### Frontend Unit Tests
+Unit tests created using Jest and React Testing Library with comprehensive coverage of components and API utilities.
+
+#### Unit Test Files Added
+- `nitrous-app/__tests__/Nav.test.tsx` — Navigation component tests
+- `nitrous-app/__tests__/Hero.test.tsx` — Hero section component tests
+- `nitrous-app/__tests__/api.test.ts` — API utility function tests
+
+#### Frontend Unit Tests Implemented
+**Navigation Component (Nav.test.tsx)**
+- Renders navigation with logo
+- Renders all navigation links (Live, Events, Teams, Journeys, Merch)
+- Renders Sign In button
+- Displays live events count ("4 Events Live")
+- Verifies navigation structure and href attributes
+
+**Hero Component (Hero.test.tsx)**
+- Renders hero section
+- Displays main title with "NITROUS" and "FUEL"
+- Displays subtitle text
+- Renders action buttons (Ignite Stream, Explore Events)
+- Renders hero navigation cards
+- Renders background image
+- Contains circuit layer elements
+- Renders HUD corners with SVG elements
+- Displays HUD label text
+
+**API Utility Functions (api.test.ts)**
+- **Event API tests:**
+  - `getEvents()` - fetches and returns events array
+  - `getEventById(id)` - fetches event by ID
+  - Handles errors properly
+- **Category API tests:**
+  - `getCategories()` - fetches all categories
+- **Journey API tests:**
+  - `getJourneys()` - fetches all journeys
+- **Merch API tests:**
+  - `getMerchItems()` - fetches merch items
+- **Authentication tests:**
+  - `register()` - user registration with email, password, name
+  - `login()` - user login with email and password
+  - `getCurrentUser()` - retrieves current user with JWT token
+- **Error handling:**
+  - API error handling for failed requests
+  - Network error handling
+
+### Frontend E2E Tests (Cypress)
+End-to-end tests created using Cypress framework with real user interaction scenarios.
+
+#### Cypress Test Files Added
+- `nitrous-app/cypress/cypress.config.ts` — Cypress configuration
+- `nitrous-app/cypress/e2e/home.cy.ts` — Home page navigation tests
+- `nitrous-app/cypress/e2e/hero-interactions.cy.ts` — Hero section interaction tests
+
+#### Frontend E2E Tests Implemented
+**Home Page Navigation (home.cy.ts)**
+- Loads home page successfully
+- Displays navigation menu with all links (Live, Events, Teams, Journeys, Merch)
+- Displays Sign In button
+- Displays hero title and subtitle
+- Displays action buttons
+- Navigation: Events page
+- Navigation: Teams page
+- Navigation: Journeys page
+- Navigation: Merch page
+- Displays live events status
+
+**Hero Section Interactions (hero-interactions.cy.ts)**
+- Verifies hero action buttons are clickable
+- Verifies all navigation cards are visible (Garage, Event Passes, Live Streams, Teams, Journeys, Merch)
+- Click Ignite Stream button
+- Click Explore Events button
+- Navigate through hero nav cards
+- Navigate to live streams from hero
+- Verifies hero section styling elements
+
+### Test Coverage Summary
+- **Component Tests:** 2 components (Nav, Hero)
+- **API Tests:** 9 functions tested (Events, Categories, Journeys, Merch, Auth)
+- **E2E Tests:** 2 test suites with 15+ test cases
+
+### Running Tests
+
+#### Unit Tests
+```bash
+# Run all unit tests
+npm run test
+
+# Watch mode
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
+```
+
+#### Cypress E2E Tests
+```bash
+# Open Cypress Test Runner
+npm run cypress
+
+# Run Cypress tests headless
+npm run cypress:run
+```
 
 
 ### 1. Backend Integration and Authorization Improvements

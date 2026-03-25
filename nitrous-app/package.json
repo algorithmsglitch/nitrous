@@ -6,20 +6,32 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "cypress": "cypress open",
+    "cypress:run": "cypress run"
   },
   "dependencies": {
+    "framer-motion": "^11.11.17",
     "next": "14.2.18",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "framer-motion": "^11.11.17"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5",
+    "cypress": "^15.13.0",
     "eslint": "^8",
-    "eslint-config-next": "14.2.18"
+    "eslint-config-next": "14.2.18",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
   }
 }
