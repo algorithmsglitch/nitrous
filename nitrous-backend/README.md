@@ -97,6 +97,7 @@ GET    /api/merch               List all merch items
 GET    /api/merch/:id           Get merch item by ID
 ```
 
+<<<<<<< Updated upstream
 #### Teams
 ```
 GET    /api/teams               List all teams
@@ -110,6 +111,8 @@ GET    /api/streams/:id         Get stream by ID
 GET    /api/streams/ws          WebSocket endpoint for telemetry stream
 ```
 
+=======
+>>>>>>> Stashed changes
 #### Auth
 ```
 POST   /api/auth/register       Create account
@@ -124,6 +127,7 @@ POST   /api/events              Create event
 PUT    /api/events/:id          Update event
 DELETE /api/events/:id          Delete event
 POST   /api/journeys/:id/book   Book a journey
+<<<<<<< Updated upstream
 POST   /api/teams/:id/follow    Follow a team
 POST   /api/teams/:id/unfollow  Unfollow a team
 GET    /api/reminders           List my reminders
@@ -132,6 +136,8 @@ DELETE /api/reminders/:id       Delete reminder
 POST   /api/orders              Create order
 GET    /api/orders              List my orders
 GET    /api/orders/:id          Get my order by ID
+=======
+>>>>>>> Stashed changes
 ```
 
 ## Authentication
@@ -176,6 +182,7 @@ curl http://localhost:8080/api/auth/me \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
+<<<<<<< Updated upstream
 ### Teams (Public + Protected)
 ```bash
 # List teams
@@ -246,6 +253,8 @@ curl -X DELETE http://localhost:8080/api/reminders/REMINDER_ID \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
+=======
+>>>>>>> Stashed changes
 ## CORS Configuration
 
 Frontend origins are whitelisted:
@@ -392,7 +401,11 @@ go build -o nitrous-api
 
 ## Next Steps
 
+<<<<<<< Updated upstream
 - [ ] Expand live telemetry pipeline (producer integration + persistence)
+=======
+- [ ] Add WebSocket for real-time updates
+>>>>>>> Stashed changes
 - [ ] Implement payment gateway (Stripe)
 - [ ] Add email verification
 - [ ] Rate limiting

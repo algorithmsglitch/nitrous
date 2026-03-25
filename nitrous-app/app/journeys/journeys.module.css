@@ -25,7 +25,11 @@
 .heroLine {
   position: absolute;
   height: 1px;
+<<<<<<< Updated upstream
   left: 0;
+=======
+  left: 0;  
+>>>>>>> Stashed changes
   right: 0;
   background: linear-gradient(90deg, transparent, rgba(0,229,255,0.08), transparent);
 }

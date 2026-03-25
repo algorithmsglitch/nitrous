@@ -48,6 +48,7 @@ type MerchItem struct {
 	Category string  `json:"category"`
 }
 
+<<<<<<< Updated upstream
 // Team represents a racing team or organization
 type Team struct {
 	ID             string    `json:"id"`
@@ -81,6 +82,8 @@ type Order struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+=======
+>>>>>>> Stashed changes
 // User represents a platform user
 type User struct {
 	ID           string    `json:"id"`
@@ -108,6 +111,7 @@ type BookingRequest struct {
 	JourneyID string `json:"journeyId" binding:"required"`
 	UserID    string `json:"userId" binding:"required"`
 }
+<<<<<<< Updated upstream
 
 // SetReminderRequest for creating a reminder.
 type SetReminderRequest struct {
@@ -121,3 +125,5 @@ type CreateOrderRequest struct {
 	MerchItemID string `json:"merchItemId" binding:"required"`
 	Quantity    int    `json:"quantity" binding:"required,min=1"`
 }
+=======
+>>>>>>> Stashed changes

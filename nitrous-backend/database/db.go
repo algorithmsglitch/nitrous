@@ -16,19 +16,27 @@ var (
 	Journeys   []models.Journey
 	MerchItems []models.MerchItem
 	Users      []models.User
+<<<<<<< Updated upstream
 	Teams      []models.Team
 	Reminders  []models.Reminder
 	Orders     []models.Order
+=======
+>>>>>>> Stashed changes
 )
 
 func InitDB() {
 	log.Println("Initializing in-memory database...")
+<<<<<<< Updated upstream
 
+=======
+	
+>>>>>>> Stashed changes
 	// Seed data
 	seedEvents()
 	seedCategories()
 	seedJourneys()
 	seedMerch()
+<<<<<<< Updated upstream
 	seedTeams()
 	seedReminders()
 	seedOrders()
@@ -76,6 +84,12 @@ func seedTeams() {
 	}
 }
 
+=======
+	
+	log.Println("✓ Database initialized with seed data")
+}
+
+>>>>>>> Stashed changes
 func CloseDB() {
 	log.Println("Closing database connection...")
 }

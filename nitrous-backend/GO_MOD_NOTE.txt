@@ -1,0 +1,8 @@
+// Add this line to your existing go.mod require block:
+//
+//     github.com/gorilla/websocket v1.5.1
+//
+// Then run:
+//     go mod tidy
+//
+// That's it — everything else in go.mod stays the same.

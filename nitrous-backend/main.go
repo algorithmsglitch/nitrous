@@ -17,8 +17,21 @@ func main() {
 
 	// Initialize database
 	database.InitDB()
+<<<<<<< Updated upstream
 	defer database.CloseDB()
 
+=======
+	database.InitNewCollections() // ← new: seeds Teams, Streams
+	defer database.CloseDB()
+
+	// Start WebSocket hub
+	go handlers.RunHub()
+
+	// Dev only: simulate live telemetry updates every 5s
+	// Comment out in production and replace with real data source
+	go handlers.SimulateTelemetry()
+
+>>>>>>> Stashed changes
 	// Create Gin router
 	r := gin.Default()
 
@@ -36,28 +49,58 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok", "message": "Nitrous API is running"})
 	})
 
+<<<<<<< Updated upstream
 	// API routes
 	api := r.Group("/api")
 	{
 		// Events
+=======
+	// WebSocket — live stream telemetry
+	r.GET("/ws/streams", handlers.StreamsWS)
+
+	// API routes
+	api := r.Group("/api")
+	{
+		// ── Events ──────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 		events := api.Group("/events")
 		{
 			events.GET("", handlers.GetEvents)
 			events.GET("/live", handlers.GetLiveEvents)
 			events.GET("/:id", handlers.GetEventByID)
+<<<<<<< Updated upstream
+=======
+			events.POST("/:id/remind", middleware.AuthMiddleware(), handlers.SetReminder)
+			events.DELETE("/:id/remind", middleware.AuthMiddleware(), handlers.DeleteReminder)
+>>>>>>> Stashed changes
 			events.POST("", middleware.AuthMiddleware(), handlers.CreateEvent)
 			events.PUT("/:id", middleware.AuthMiddleware(), handlers.UpdateEvent)
 			events.DELETE("/:id", middleware.AuthMiddleware(), handlers.DeleteEvent)
 		}
 
+<<<<<<< Updated upstream
 		// Categories
+=======
+		// ── Streams ──────────────────────────────────────────────────────────
+		streams := api.Group("/streams")
+		{
+			streams.GET("", handlers.GetStreams)
+			streams.GET("/:id", handlers.GetStreamByID)
+		}
+
+		// ── Categories ───────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 		categories := api.Group("/categories")
 		{
 			categories.GET("", handlers.GetCategories)
 			categories.GET("/:slug", handlers.GetCategoryBySlug)
 		}
 
+<<<<<<< Updated upstream
 		// Journeys
+=======
+		// ── Journeys ─────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 		journeys := api.Group("/journeys")
 		{
 			journeys.GET("", handlers.GetJourneys)
@@ -65,13 +108,18 @@ func main() {
 			journeys.POST("/:id/book", middleware.AuthMiddleware(), handlers.BookJourney)
 		}
 
+<<<<<<< Updated upstream
 		// Merch
+=======
+		// ── Merch ────────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 		merch := api.Group("/merch")
 		{
 			merch.GET("", handlers.GetMerchItems)
 			merch.GET("/:id", handlers.GetMerchItemByID)
 		}
 
+<<<<<<< Updated upstream
 		// Teams
 		teams := api.Group("/teams")
 		{
@@ -106,11 +154,36 @@ func main() {
 		}
 
 		// Auth
+=======
+		// ── Orders ───────────────────────────────────────────────────────────
+		orders := api.Group("/orders")
+		orders.Use(middleware.AuthMiddleware())
+		{
+			orders.POST("", handlers.CreateOrder)
+			orders.GET("", handlers.GetMyOrders)
+			orders.GET("/:id", handlers.GetOrderByID)
+		}
+
+		// ── Auth ─────────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", handlers.Register)
 			auth.POST("/login", handlers.Login)
 			auth.GET("/me", middleware.AuthMiddleware(), handlers.GetCurrentUser)
+<<<<<<< Updated upstream
+=======
+			auth.GET("/reminders", middleware.AuthMiddleware(), handlers.GetMyReminders)
+		}
+
+		// ── Teams ────────────────────────────────────────────────────────────
+		teams := api.Group("/teams")
+		{
+			teams.GET("", handlers.GetTeams)
+			teams.GET("/:id", handlers.GetTeamByID)
+			teams.POST("/:id/follow", middleware.AuthMiddleware(), handlers.FollowTeam)
+			teams.DELETE("/:id/follow", middleware.AuthMiddleware(), handlers.UnfollowTeam)
+>>>>>>> Stashed changes
 		}
 	}
 
