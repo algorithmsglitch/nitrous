@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "framer-motion": "^11.11.17",
-    "next": "14.2.18",
+    "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -28,7 +28,7 @@
     "@types/react-dom": "^18",
     "cypress": "^15.13.0",
     "eslint": "^8",
-    "eslint-config-next": "14.2.18",
+    "eslint-config-next": "^16.2.1",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "ts-node": "^10.9.2",

@@ -11,17 +11,17 @@ describe('Hero Section Interactions', () => {
 
   it('verifies all navigation cards are visible in hero section', () => {
     // Access Garage card
-    cy.contains(/ACCESS\nGARAGE/).should('be.visible')
+    cy.contains(/ACCESS.*GARAGE/).should('be.visible')
     // Access Event Passes card
-    cy.contains(/ACCESS\nEVENT PASSES/).should('be.visible')
+    cy.contains(/ACCESS.*EVENT PASSES/).should('be.visible')
     // Access Live Streams card
-    cy.contains(/ACCESS\nLIVE STREAMS/).should('be.visible')
+    cy.contains(/ACCESS.*LIVE STREAMS/).should('be.visible')
     // Teams card
-    cy.contains('TEAMS').should('be.visible')
+    cy.contains(/TEAMS/).should('be.visible')
     // Journeys card
-    cy.contains('JOURNEYS').should('be.visible')
+    cy.contains(/JOURNEYS/).should('be.visible')
     // Merch card
-    cy.contains('MERCH').should('be.visible')
+    cy.contains(/MERCH/).should('be.visible')
   })
 
   it('can click the Ignite Stream button', () => {
@@ -38,12 +38,12 @@ describe('Hero Section Interactions', () => {
 
   it('can navigate through hero nav cards', () => {
     // Click on the garage link from hero nav
-    cy.contains(/ACCESS\nGARAGE/).click()
+    cy.contains(/ACCESS.*GARAGE/).click()
     cy.url().should('include', '/garage')
   })
 
   it('can navigate to live streams from hero', () => {
-    cy.contains(/ACCESS\nLIVE STREAMS/).click()
+    cy.contains(/ACCESS.*LIVE STREAMS/).click()
     cy.url().should('include', '/live')
   })
 
