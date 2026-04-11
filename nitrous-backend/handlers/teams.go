@@ -3,16 +3,21 @@ package handlers
 import (
 	"net/http"
 	"nitrous-backend/database"
-<<<<<<< Updated upstream
 
 	"github.com/gin-gonic/gin"
-=======
 	"nitrous-backend/models"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
->>>>>>> Stashed changes
+
+
+	"nitrous-backend/models"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	edda093f8c6ae5b6d629683c166654cfa599f29e
 )
 
 // GetTeams returns all teams
@@ -23,11 +28,7 @@ func GetTeams(c *gin.Context) {
 	})
 }
 
-<<<<<<< Updated upstream
-// GetTeamByID returns a single team by ID
-=======
-// GetTeamByID returns a single team
->>>>>>> Stashed changes
+
 func GetTeamByID(c *gin.Context) {
 	id := c.Param("id")
 
@@ -41,7 +42,66 @@ func GetTeamByID(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{"error": "Team not found"})
 }
 
-<<<<<<< Updated upstream
+
+// CreateTeam creates a new team (admin only)
+func CreateTeam(c *gin.Context) {
+	var team models.Team
+
+	if err := c.ShouldBindJSON(&team); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	team.ID = uuid.New().String()
+	team.CreatedAt = time.Now()
+	team.Followers = []string{}
+	team.FollowersCount = 0
+
+	database.Teams = append(database.Teams, team)
+	c.JSON(http.StatusCreated, team)
+}
+
+// UpdateTeam updates an existing team (admin only)
+func UpdateTeam(c *gin.Context) {
+	id := c.Param("id")
+
+	var updated models.Team
+	if err := c.ShouldBindJSON(&updated); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	for i, team := range database.Teams {
+		if team.ID == id {
+			updated.ID = id
+			updated.CreatedAt = team.CreatedAt
+			updated.Followers = team.Followers
+			updated.FollowersCount = team.FollowersCount
+			database.Teams[i] = updated
+			c.JSON(http.StatusOK, updated)
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "Team not found"})
+}
+
+// DeleteTeam deletes a team (admin only)
+func DeleteTeam(c *gin.Context) {
+	id := c.Param("id")
+
+	for i, team := range database.Teams {
+		if team.ID == id {
+			database.Teams = append(database.Teams[:i], database.Teams[i+1:]...)
+			c.JSON(http.StatusOK, gin.H{"message": "Team deleted"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "Team not found"})
+}
+
+edda093f8c6ae5b6d629683c166654cfa599f29e
 // FollowTeam adds the authenticated user to the team's followers
 func FollowTeam(c *gin.Context) {
 	userID, exists := c.Get("userID")
@@ -67,7 +127,7 @@ func FollowTeam(c *gin.Context) {
 			database.Teams[i].FollowersCount = len(database.Teams[i].Followers)
 
 			c.JSON(http.StatusOK, gin.H{"message": "Team followed", "team": database.Teams[i]})
-=======
+
 // FollowTeam adds a follow record for the authenticated user
 func FollowTeam(c *gin.Context) {
 	teamID := c.Param("id")
@@ -90,7 +150,7 @@ func FollowTeam(c *gin.Context) {
 	for _, f := range database.Follows {
 		if f.UserID == userID && f.TeamID == teamID {
 			c.JSON(http.StatusConflict, gin.H{"error": "Already following this team"})
->>>>>>> Stashed changes
+
 			return
 		}
 	}

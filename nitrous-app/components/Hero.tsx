@@ -1,7 +1,6 @@
 'use client'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useRef } from 'react'
 import styles from './Hero.module.css'
 
 const heroNavCards = [
@@ -14,14 +13,8 @@ const heroNavCards = [
 ]
 
 export default function Hero() {
-  const heroRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    // Add any client-side animations here
-  }, [])
-
   return (
-    <section ref={heroRef} className={styles.hero}>
+    <section className={styles.hero}>
       {/* Background Image */}
       <div className={styles.heroImgWrap}>
         <Image
