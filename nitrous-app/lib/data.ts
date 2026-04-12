@@ -12,7 +12,7 @@ export const events: Event[] = [
   {
     id: '2',
     title: 'Dakar Rally — Stage 9',
-    location: 'Al Ula → Ha'il · Saudi Arabia',
+    location: 'Al Ula → Hail · Saudi Arabia',
     date: 'Feb 10, 2026',
     time: '09:00 UTC',
     isLive: false,
