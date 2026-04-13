@@ -115,6 +115,7 @@ func main() {
 			orders.GET("", middleware.AuthMiddleware(), handlers.GetMyOrders)
 			orders.POST("", middleware.AuthMiddleware(), handlers.CreateOrder)
 			orders.GET("/:id", middleware.AuthMiddleware(), handlers.GetOrderByID)
+			orders.DELETE("/:id", middleware.AuthMiddleware(), handlers.CancelOrder)
 		}
 
 		// Auth

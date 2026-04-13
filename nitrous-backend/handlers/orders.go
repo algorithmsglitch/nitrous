@@ -99,3 +99,34 @@ func GetOrderByID(c *gin.Context) {
 
 	c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
 }
+
+// CancelOrder cancels an order owned by the authenticated user.
+func CancelOrder(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	orderID := c.Param("id")
+
+	for i, order := range database.Orders {
+		if order.ID == orderID {
+			if order.UserID != userID.(string) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+				return
+			}
+
+			if order.Status == "cancelled" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Order already cancelled"})
+				return
+			}
+
+			database.Orders[i].Status = "cancelled"
+			c.JSON(http.StatusOK, database.Orders[i])
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+}
