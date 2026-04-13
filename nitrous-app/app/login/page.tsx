@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
+import { login, register } from '@/lib/api'
 import styles from './login.module.css'
 
 type Mode = 'signin' | 'signup'
@@ -47,19 +48,10 @@ export default function LoginPage() {
     }
 
     try {
-      const endpoint = `/api/auth/${mode === 'signin' ? 'login' : 'register'}`
-      
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed')
-      }
+      const data =
+        mode === 'signin'
+          ? await login(formData.email, formData.password)
+          : await register(formData.email, formData.password, formData.name)
 
       // Store auth state
       localStorage.setItem('nitrous_token', data.token)
@@ -68,7 +60,7 @@ export default function LoginPage() {
       }
 
       // Next.js standard for navigation
-      router.push('/dashboard')
+      router.push('/')
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')

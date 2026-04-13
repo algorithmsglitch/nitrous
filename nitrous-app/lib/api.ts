@@ -29,12 +29,26 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
       },
     })
 
+    const contentType = res.headers.get('content-type') || ''
+    const isJSON = contentType.includes('application/json')
+
     if (!res.ok) {
-      const error = await res.json()
-      throw new Error(error.error || 'API request failed')
+      if (isJSON) {
+        const error = await res.json()
+        throw new Error(error.error || 'API request failed')
+      }
+
+      const raw = await res.text()
+      const bodyPreview = raw.trim().slice(0, 120)
+      throw new Error(bodyPreview || `Request failed (${res.status})`)
     }
 
-    return res.json()
+    if (isJSON) {
+      return res.json()
+    }
+
+    const raw = await res.text()
+    throw new Error(`Expected JSON response from ${endpoint}, received: ${raw.trim().slice(0, 120)}`)
   } catch (error) {
     console.error(`API Error [${endpoint}]:`, error)
     throw error
