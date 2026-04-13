@@ -264,3 +264,12 @@ export async function getCurrentUser(token: string): Promise<User> {
     headers: { Authorization: `Bearer ${token}` },
   })
 }
+export async function purchasePass(
+  id: string,
+  token: string
+): Promise<{ message: string; passId: string }> {
+  return fetchAPI<{ message: string; passId: string }>(`/passes/${id}/purchase`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}

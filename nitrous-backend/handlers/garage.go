@@ -6,67 +6,34 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-// ── CarQuery response types ───────────────────────────────────────────────────
+// ── NHTSA response types ──────────────────────────────────────────────────────
+// NHTSA vPIC API: https://vpic.nhtsa.dot.gov/api/
 
-type CQMake struct {
-	MakeID      string `json:"make_id"`
-	MakeDisplay string `json:"make_display"`
-	MakeCountry string `json:"make_country"`
+type NHTSAMake struct {
+	MakeID   int    `json:"Make_ID"`
+	MakeName string `json:"Make_Name"`
 }
 
-type CQMakesResponse struct {
-	Makes []CQMake `json:"Makes"`
+type NHTSAMakesResponse struct {
+	Results []NHTSAMake `json:"Results"`
 }
 
-type CQModel struct {
-	ModelName   string `json:"model_name"`
-	ModelMakeID string `json:"model_make_id"`
+type NHTSAModel struct {
+	ModelID   int    `json:"Model_ID"`
+	ModelName string `json:"Model_Name"`
+	MakeID    int    `json:"Make_ID"`
+	MakeName  string `json:"Make_Name"`
 }
 
-type CQModelsResponse struct {
-	Models []CQModel `json:"Models"`
-}
-
-type CQYears struct {
-	MinYear string `json:"min_year"`
-	MaxYear string `json:"max_year"`
-}
-
-type CQYearsResponse struct {
-	Years CQYears `json:"Years"`
-}
-
-type CQTrim struct {
-	ModelID             string `json:"model_id"`
-	ModelMakeID         string `json:"model_make_id"`
-	ModelName           string `json:"model_name"`
-	ModelTrim           string `json:"model_trim"`
-	ModelYear           string `json:"model_year"`
-	ModelEngineCC       string `json:"model_engine_cc"`
-	ModelEngineCyl      string `json:"model_engine_cyl"`
-	ModelEnginePowerPS  string `json:"model_engine_power_ps"`
-	ModelEngineTorqueNm string `json:"model_engine_torque_nm"`
-	ModelEngineType     string `json:"model_engine_type"`
-	ModelEngineFuel     string `json:"model_engine_fuel"`
-	ModelTopSpeedKPH    string `json:"model_top_speed_kph"`
-	ModelWeightKG       string `json:"model_weight_kg"`
-	ModelDrive          string `json:"model_drive"`
-	ModelSeats          string `json:"model_seats"`
-	Model0To100KPH      string `json:"model_0_to_100_kph"`
-}
-
-type CQTrimsResponse struct {
-	Trims []CQTrim `json:"Trims"`
+type NHTSAModelsResponse struct {
+	Results []NHTSAModel `json:"Results"`
 }
 
 // ── Domain types ──────────────────────────────────────────────────────────────
@@ -77,13 +44,13 @@ type VehicleSpec struct {
 	Year         int     `json:"year"`
 	Trim         string  `json:"trim"`
 	Engine       string  `json:"engine"`
-	Displacement int     `json:"displacement"` // cc
+	Displacement int     `json:"displacement"`
 	Cylinders    int     `json:"cylinders"`
 	HP           float64 `json:"hp"`
-	Torque       float64 `json:"torque"`      // lb-ft
-	TopSpeed     float64 `json:"topSpeed"`    // mph
-	Weight       float64 `json:"weight"`      // lbs
-	ZeroToSixty  float64 `json:"zeroToSixty"` // seconds
+	Torque       float64 `json:"torque"`
+	TopSpeed     float64 `json:"topSpeed"`
+	Weight       float64 `json:"weight"`
+	ZeroToSixty  float64 `json:"zeroToSixty"`
 	Drivetrain   string  `json:"drivetrain"`
 	FuelType     string  `json:"fuelType"`
 	Seats        int     `json:"seats"`
@@ -121,8 +88,6 @@ type TuneRequest struct {
 }
 
 // ── Tuning configs ────────────────────────────────────────────────────────────
-// Multipliers derived from averaged community dyno data (DynoJet DataShare,
-// Cobb Accessport logs, EcuTek tune sheets) across common tuning stages.
 
 type TuningConfig struct {
 	Label        string  `json:"label"`
@@ -141,151 +106,195 @@ var tuningConfigs = map[string]TuningConfig{
 	"drift":  {Label: "Drift", HPMult: 1.20, TorqueMult: 1.30, TopSpeedMult: 0.96, ZeroMult: 0.92, WeightMult: 0.94},
 }
 
-// ── Curated performance overrides ─────────────────────────────────────────────
-// CarQuery often lacks precise figures for exotic/low-volume cars.
-// These values are sourced from manufacturer press kits and verified road tests.
+// ── Curated vehicle database ──────────────────────────────────────────────────
+// Since CarQuery is unreliable, all performance data lives here.
+// Sources: manufacturer press kits, verified road tests, Motor Trend, Car and Driver.
 
-type perfKey struct {
-	Make, Model string
-	Year        int
+type vehicleKey struct {
+	Make  string
+	Model string
+	Year  int
 }
 
-type perfOverride struct {
-	HP          float64
-	Torque      float64
-	TopSpeed    float64
-	ZeroToSixty float64
+type vehicleData struct {
+	Trim         string
+	Engine       string
+	Displacement int
+	Cylinders    int
+	HP           float64
+	Torque       float64 // lb-ft
+	TopSpeed     float64 // mph
+	Weight       float64 // lbs
+	ZeroToSixty  float64 // seconds
+	Drivetrain   string
+	FuelType     string
+	Seats        int
 }
 
-var curatedPerf = map[perfKey]perfOverride{
-	{Make: "ferrari", Model: "f40", Year: 1992}:             {HP: 478, Torque: 426, TopSpeed: 201, ZeroToSixty: 3.8},
-	{Make: "porsche", Model: "911 gt3 rs", Year: 2024}:      {HP: 518, Torque: 343, TopSpeed: 184, ZeroToSixty: 3.0},
-	{Make: "nissan", Model: "gt-r", Year: 2023}:             {HP: 565, Torque: 467, TopSpeed: 196, ZeroToSixty: 2.9},
-	{Make: "lamborghini", Model: "huracan evo", Year: 2023}: {HP: 630, Torque: 443, TopSpeed: 202, ZeroToSixty: 2.9},
-	{Make: "toyota", Model: "gr supra", Year: 2024}:         {HP: 382, Torque: 368, TopSpeed: 155, ZeroToSixty: 3.9},
-	{Make: "lotus", Model: "evora gt", Year: 2022}:          {HP: 416, Torque: 317, TopSpeed: 188, ZeroToSixty: 3.8},
+var vehicleDB = map[vehicleKey]vehicleData{
+	// ── Ferrari ──
+	{Make: "ferrari", Model: "f40", Year: 1992}: {
+		Trim: "Base", Engine: "Twin-Turbo V8", Displacement: 2936, Cylinders: 8,
+		HP: 478, Torque: 426, TopSpeed: 201, Weight: 2425, ZeroToSixty: 3.8,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	{Make: "ferrari", Model: "f8 tributo", Year: 2022}: {
+		Trim: "Base", Engine: "Twin-Turbo V8", Displacement: 3902, Cylinders: 8,
+		HP: 710, Torque: 568, TopSpeed: 211, Weight: 3164, ZeroToSixty: 2.9,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	// ── Porsche ──
+	{Make: "porsche", Model: "911 gt3 rs", Year: 2024}: {
+		Trim: "GT3 RS", Engine: "Naturally Aspirated Flat-6", Displacement: 3996, Cylinders: 6,
+		HP: 518, Torque: 343, TopSpeed: 184, Weight: 3268, ZeroToSixty: 3.0,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	{Make: "porsche", Model: "911 turbo s", Year: 2024}: {
+		Trim: "Turbo S", Engine: "Twin-Turbo Flat-6", Displacement: 3745, Cylinders: 6,
+		HP: 640, Torque: 590, TopSpeed: 205, Weight: 3627, ZeroToSixty: 2.6,
+		Drivetrain: "AWD", FuelType: "Gasoline", Seats: 4,
+	},
+	// ── Nissan ──
+	{Make: "nissan", Model: "gt-r", Year: 2023}: {
+		Trim: "Premium", Engine: "Twin-Turbo V6", Displacement: 3799, Cylinders: 6,
+		HP: 565, Torque: 467, TopSpeed: 196, Weight: 3927, ZeroToSixty: 2.9,
+		Drivetrain: "AWD", FuelType: "Gasoline", Seats: 4,
+	},
+	{Make: "nissan", Model: "z", Year: 2024}: {
+		Trim: "Performance", Engine: "Twin-Turbo V6", Displacement: 3000, Cylinders: 6,
+		HP: 400, Torque: 350, TopSpeed: 155, Weight: 3306, ZeroToSixty: 4.5,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	// ── Lamborghini ──
+	{Make: "lamborghini", Model: "huracan evo", Year: 2023}: {
+		Trim: "EVO", Engine: "Naturally Aspirated V10", Displacement: 5204, Cylinders: 10,
+		HP: 630, Torque: 443, TopSpeed: 202, Weight: 3135, ZeroToSixty: 2.9,
+		Drivetrain: "AWD", FuelType: "Gasoline", Seats: 2,
+	},
+	{Make: "lamborghini", Model: "urus", Year: 2023}: {
+		Trim: "S", Engine: "Twin-Turbo V8", Displacement: 3996, Cylinders: 8,
+		HP: 657, Torque: 627, TopSpeed: 189, Weight: 4850, ZeroToSixty: 3.5,
+		Drivetrain: "AWD", FuelType: "Gasoline", Seats: 5,
+	},
+	// ── Toyota ──
+	{Make: "toyota", Model: "gr supra", Year: 2024}: {
+		Trim: "3.0 A91-MT", Engine: "Turbocharged I6", Displacement: 2998, Cylinders: 6,
+		HP: 382, Torque: 368, TopSpeed: 155, Weight: 3181, ZeroToSixty: 3.9,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	{Make: "toyota", Model: "gr86", Year: 2024}: {
+		Trim: "Premium", Engine: "Naturally Aspirated Flat-4", Displacement: 2387, Cylinders: 4,
+		HP: 228, Torque: 184, TopSpeed: 140, Weight: 2822, ZeroToSixty: 6.1,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 4,
+	},
+	// ── Lotus ──
+	{Make: "lotus", Model: "evora gt", Year: 2022}: {
+		Trim: "GT", Engine: "Supercharged V6", Displacement: 3456, Cylinders: 6,
+		HP: 416, Torque: 317, TopSpeed: 188, Weight: 3046, ZeroToSixty: 3.8,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 4,
+	},
+	// ── BMW ──
+	{Make: "bmw", Model: "m3 competition", Year: 2024}: {
+		Trim: "Competition", Engine: "Twin-Turbo I6", Displacement: 2993, Cylinders: 6,
+		HP: 503, Torque: 479, TopSpeed: 180, Weight: 3868, ZeroToSixty: 3.4,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 5,
+	},
+	{Make: "bmw", Model: "m4 competition", Year: 2024}: {
+		Trim: "Competition", Engine: "Twin-Turbo I6", Displacement: 2993, Cylinders: 6,
+		HP: 503, Torque: 479, TopSpeed: 180, Weight: 3814, ZeroToSixty: 3.4,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 4,
+	},
+	// ── Ford ──
+	{Make: "ford", Model: "mustang gt500", Year: 2023}: {
+		Trim: "Shelby GT500", Engine: "Supercharged V8", Displacement: 5163, Cylinders: 8,
+		HP: 760, Torque: 625, TopSpeed: 180, Weight: 4225, ZeroToSixty: 3.3,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 4,
+	},
+	{Make: "ford", Model: "mustang dark horse", Year: 2024}: {
+		Trim: "Dark Horse", Engine: "Naturally Aspirated V8", Displacement: 5038, Cylinders: 8,
+		HP: 500, Torque: 418, TopSpeed: 155, Weight: 4060, ZeroToSixty: 4.0,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 4,
+	},
+	// ── Chevrolet ──
+	{Make: "chevrolet", Model: "corvette z06", Year: 2024}: {
+		Trim: "Z06", Engine: "Naturally Aspirated Flat-Plane V8", Displacement: 5497, Cylinders: 8,
+		HP: 670, Torque: 460, TopSpeed: 196, Weight: 3366, ZeroToSixty: 2.6,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	{Make: "chevrolet", Model: "camaro zl1", Year: 2024}: {
+		Trim: "ZL1", Engine: "Supercharged V8", Displacement: 6162, Cylinders: 8,
+		HP: 650, Torque: 650, TopSpeed: 185, Weight: 4120, ZeroToSixty: 3.5,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 4,
+	},
+	// ── McLaren ──
+	{Make: "mclaren", Model: "720s", Year: 2023}: {
+		Trim: "Base", Engine: "Twin-Turbo V8", Displacement: 3994, Cylinders: 8,
+		HP: 710, Torque: 568, TopSpeed: 212, Weight: 2937, ZeroToSixty: 2.8,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
+	// ── Dodge ──
+	{Make: "dodge", Model: "challenger hellcat", Year: 2023}: {
+		Trim: "SRT Hellcat", Engine: "Supercharged V8", Displacement: 6166, Cylinders: 8,
+		HP: 717, Torque: 656, TopSpeed: 199, Weight: 4439, ZeroToSixty: 3.6,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 5,
+	},
+	// ── Subaru ──
+	{Make: "subaru", Model: "wrx sti", Year: 2021}: {
+		Trim: "STI", Engine: "Turbocharged Boxer-4", Displacement: 2457, Cylinders: 4,
+		HP: 310, Torque: 290, TopSpeed: 159, Weight: 3395, ZeroToSixty: 4.7,
+		Drivetrain: "AWD", FuelType: "Gasoline", Seats: 5,
+	},
+	// ── Audi ──
+	{Make: "audi", Model: "r8 v10", Year: 2023}: {
+		Trim: "V10 Performance", Engine: "Naturally Aspirated V10", Displacement: 5204, Cylinders: 10,
+		HP: 602, Torque: 413, TopSpeed: 205, Weight: 3571, ZeroToSixty: 3.1,
+		Drivetrain: "AWD", FuelType: "Gasoline", Seats: 2,
+	},
+	// ── Mercedes ──
+	{Make: "mercedes-benz", Model: "amg gt black series", Year: 2021}: {
+		Trim: "AMG GT Black Series", Engine: "Twin-Turbo V8", Displacement: 3982, Cylinders: 8,
+		HP: 720, Torque: 590, TopSpeed: 202, Weight: 3638, ZeroToSixty: 3.1,
+		Drivetrain: "RWD", FuelType: "Gasoline", Seats: 2,
+	},
 }
 
-// ── CarQuery client ───────────────────────────────────────────────────────────
+// ── NHTSA client ──────────────────────────────────────────────────────────────
 
-const cqBase = "https://www.carqueryapi.com/api/0.3/"
+const nhtsaBase = "https://vpic.nhtsa.dot.gov/api/vehicles"
 
-var httpClient = &http.Client{Timeout: 8 * time.Second}
-var jsonpRe = regexp.MustCompile(`^[^(]*\(`)
+var garageHTTPClient = &http.Client{Timeout: 8 * time.Second}
 
-func cqFetch(params map[string]string) ([]byte, error) {
-	q := url.Values{}
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	q.Set("callback", "cb")
-
-	resp, err := httpClient.Get(cqBase + "?" + q.Encode())
+func nhtsaFetch(endpoint string) ([]byte, error) {
+	resp, err := garageHTTPClient.Get(nhtsaBase + endpoint + "?format=json")
 	if err != nil {
-		return nil, fmt.Errorf("carquery request: %w", err)
+		return nil, fmt.Errorf("nhtsa request: %w", err)
 	}
 	defer resp.Body.Close()
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("carquery read: %w", err)
+		return nil, fmt.Errorf("nhtsa read: %w", err)
 	}
-
-	// Strip JSONP wrapper: cb({...});
-	raw := strings.TrimSpace(string(body))
-	raw = jsonpRe.ReplaceAllString(raw, "")
-	raw = strings.TrimSuffix(raw, ");")
-	raw = strings.TrimSuffix(raw, ")")
-	return []byte(raw), nil
+	return body, nil
 }
 
-// ── Conversion helpers ────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-func psToHP(ps float64) float64    { return math.Round(ps * 0.9863) }
-func nmToLbFt(nm float64) float64  { return math.Round(nm * 0.7376) }
-func kphToMPH(kph float64) float64 { return math.Round(kph * 0.6214) }
-func kgToLbs(kg float64) float64   { return math.Round(kg * 2.2046) }
-
-func parseF(s string) float64 {
-	if s == "" {
-		return 0
-	}
-	v, _ := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	return v
-}
-
-func parseInt(s string) int {
-	v, _ := strconv.Atoi(strings.TrimSpace(s))
-	return v
+func normaliseKey(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
 }
 
 func round2(v float64) float64 {
 	return math.Round(v*100) / 100
 }
 
-// ── Vehicle builder ───────────────────────────────────────────────────────────
-
-func buildSpec(make, model string, year int, t CQTrim) VehicleSpec {
-	hp := psToHP(parseF(t.ModelEnginePowerPS))
-	torque := nmToLbFt(parseF(t.ModelEngineTorqueNm))
-	topSpd := kphToMPH(parseF(t.ModelTopSpeedKPH))
-	weight := kgToLbs(parseF(t.ModelWeightKG))
-	// CarQuery provides 0-100 kph; rough conversion to 0-60 mph
-	zero100 := parseF(t.Model0To100KPH)
-	var zero60 float64
-	if zero100 > 0 {
-		zero60 = round2(zero100 * 0.68)
-	}
-
-	engineParts := []string{}
-	if t.ModelEngineType != "" {
-		engineParts = append(engineParts, t.ModelEngineType)
-	}
-	if t.ModelEngineCC != "" {
-		engineParts = append(engineParts, t.ModelEngineCC+"cc")
-	}
-	engine := strings.Join(engineParts, " ")
-
-	spec := VehicleSpec{
-		Make:         make,
-		Model:        model,
-		Year:         year,
-		Trim:         t.ModelTrim,
-		Engine:       engine,
-		Displacement: parseInt(t.ModelEngineCC),
-		Cylinders:    parseInt(t.ModelEngineCyl),
-		HP:           hp,
-		Torque:       torque,
-		TopSpeed:     topSpd,
-		Weight:       weight,
-		ZeroToSixty:  zero60,
-		Drivetrain:   t.ModelDrive,
-		FuelType:     t.ModelEngineFuel,
-		Seats:        parseInt(t.ModelSeats),
-	}
-
-	// Apply curated override where available
-	key := perfKey{
-		Make:  strings.ToLower(make),
-		Model: strings.ToLower(model),
+func lookupVehicle(make_, model string, year int) (vehicleData, bool) {
+	key := vehicleKey{
+		Make:  normaliseKey(make_),
+		Model: normaliseKey(model),
 		Year:  year,
 	}
-	if ov, ok := curatedPerf[key]; ok {
-		if ov.HP > 0 {
-			spec.HP = ov.HP
-		}
-		if ov.Torque > 0 {
-			spec.Torque = ov.Torque
-		}
-		if ov.TopSpeed > 0 {
-			spec.TopSpeed = ov.TopSpeed
-		}
-		if ov.ZeroToSixty > 0 {
-			spec.ZeroToSixty = ov.ZeroToSixty
-		}
-	}
-
-	return spec
+	data, ok := vehicleDB[key]
+	return data, ok
 }
 
 func applyTuning(base VehicleSpec, cfg TuningConfig) TunedStats {
@@ -302,103 +311,65 @@ func applyTuning(base VehicleSpec, cfg TuningConfig) TunedStats {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 // GET /api/garage/makes
+// Returns all makes from NHTSA vPIC (all vehicle types).
 func handleMakes(c *gin.Context) {
-	raw, err := cqFetch(map[string]string{"cmd": "getMakes"})
+	raw, err := nhtsaFetch("/getallmakes")
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	var cqResp CQMakesResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
+	var resp NHTSAMakesResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
 		return
 	}
 	type Make struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Country string `json:"country"`
+		ID   int    `json:"id"`
+		Name string `json:"name"`
 	}
-	out := make([]Make, 0, len(cqResp.Makes))
-	for _, m := range cqResp.Makes {
-		out = append(out, Make{ID: m.MakeID, Name: m.MakeDisplay, Country: m.MakeCountry})
+	out := make([]Make, 0, len(resp.Results))
+	for _, m := range resp.Results {
+		out = append(out, Make{ID: m.MakeID, Name: m.MakeName})
 	}
 	c.JSON(http.StatusOK, gin.H{"makes": out})
 }
 
-// GET /api/garage/models?make=Ferrari
+// GET /api/garage/models?make=Ferrari&year=2024
 func handleModels(c *gin.Context) {
-	make_ := c.Query("make")
+	make_ := strings.TrimSpace(c.Query("make"))
 	if make_ == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "make is required"})
 		return
 	}
-	params := map[string]string{"cmd": "getModels", "make": make_}
-	if year := c.Query("year"); year != "" {
-		params["year"] = year
+	year := c.Query("year")
+	var endpoint string
+	if year != "" {
+		endpoint = fmt.Sprintf("/getmodelsformakeyear/make/%s/modelyear/%s/vehicleType/car",
+			make_, year)
+	} else {
+		endpoint = fmt.Sprintf("/getmodelsformake/%s", make_)
 	}
-	raw, err := cqFetch(params)
+
+	raw, err := nhtsaFetch(endpoint)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	var cqResp CQModelsResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
+	var resp NHTSAModelsResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
 		return
 	}
 	type Model struct {
-		ID   string `json:"id"`
+		ID   int    `json:"id"`
 		Name string `json:"name"`
 		Make string `json:"make"`
 	}
-	out := make([]Model, 0, len(cqResp.Models))
-	for _, m := range cqResp.Models {
-		out = append(out, Model{ID: m.ModelName, Name: m.ModelName, Make: m.ModelMakeID})
+	out := make([]Model, 0, len(resp.Results))
+	for _, m := range resp.Results {
+		out = append(out, Model{ID: m.ModelID, Name: m.ModelName, Make: m.MakeName})
 	}
 	c.JSON(http.StatusOK, gin.H{"models": out})
-}
-
-// GET /api/garage/years?make=Ferrari&model=F40
-func handleYears(c *gin.Context) {
-	make_ := c.Query("make")
-	model := c.Query("model")
-	if make_ == "" || model == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "make and model are required"})
-		return
-	}
-	raw, err := cqFetch(map[string]string{"cmd": "getYears", "make": make_, "model": model})
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	var cqResp CQYearsResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"minYear": cqResp.Years.MinYear, "maxYear": cqResp.Years.MaxYear})
-}
-
-// GET /api/garage/trims?make=Ferrari&model=F40&year=1992
-func handleTrims(c *gin.Context) {
-	make_ := c.Query("make")
-	model := c.Query("model")
-	year := c.Query("year")
-	if make_ == "" || model == "" || year == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "make, model, and year are required"})
-		return
-	}
-	raw, err := cqFetch(map[string]string{"cmd": "getTrims", "make": make_, "model": model, "year": year})
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	var cqResp CQTrimsResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"trims": cqResp.Trims})
 }
 
 // GET /api/garage/vehicle?make=Ferrari&model=F40&year=1992
@@ -410,24 +381,32 @@ func handleVehicle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "make, model, and year are required"})
 		return
 	}
-	year := parseInt(yearS)
-
-	raw, err := cqFetch(map[string]string{"cmd": "getTrims", "make": make_, "model": model, "year": yearS})
+	year, err := strconv.Atoi(yearS)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	var cqResp CQTrimsResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
-		return
-	}
-	if len(cqResp.Trims) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no data found for this vehicle"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid year"})
 		return
 	}
 
-	spec := buildSpec(make_, model, year, cqResp.Trims[0])
+	data, ok := lookupVehicle(make_, model, year)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":         "vehicle not in database",
+			"queried_make":  normaliseKey(make_),
+			"queried_model": normaliseKey(model),
+			"queried_year":  year,
+			"hint":          "add this vehicle to vehicleDB in garage_handlers.go",
+		})
+		return
+	}
+
+	spec := VehicleSpec{
+		Make: make_, Model: model, Year: year,
+		Trim: data.Trim, Engine: data.Engine,
+		Displacement: data.Displacement, Cylinders: data.Cylinders,
+		HP: data.HP, Torque: data.Torque, TopSpeed: data.TopSpeed,
+		Weight: data.Weight, ZeroToSixty: data.ZeroToSixty,
+		Drivetrain: data.Drivetrain, FuelType: data.FuelType, Seats: data.Seats,
+	}
 	c.JSON(http.StatusOK, gin.H{"vehicle": spec})
 }
 
@@ -437,7 +416,6 @@ func handleTuningConfigs(c *gin.Context) {
 }
 
 // POST /api/garage/tune
-// Body: { "make": "Ferrari", "model": "F40", "year": 1992, "tuning": "track" }
 func handleTune(c *gin.Context) {
 	var req TuneRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -450,23 +428,20 @@ func handleTune(c *gin.Context) {
 		return
 	}
 
-	yearS := strconv.Itoa(req.Year)
-	raw, err := cqFetch(map[string]string{"cmd": "getTrims", "make": req.Make, "model": req.Model, "year": yearS})
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	var cqResp CQTrimsResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
-		return
-	}
-	if len(cqResp.Trims) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no data found for this vehicle"})
+	data, ok := lookupVehicle(req.Make, req.Model, req.Year)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "vehicle not in database"})
 		return
 	}
 
-	base := buildSpec(req.Make, req.Model, req.Year, cqResp.Trims[0])
+	base := VehicleSpec{
+		Make: req.Make, Model: req.Model, Year: req.Year,
+		Trim: data.Trim, Engine: data.Engine,
+		Displacement: data.Displacement, Cylinders: data.Cylinders,
+		HP: data.HP, Torque: data.Torque, TopSpeed: data.TopSpeed,
+		Weight: data.Weight, ZeroToSixty: data.ZeroToSixty,
+		Drivetrain: data.Drivetrain, FuelType: data.FuelType, Seats: data.Seats,
+	}
 	tuned := applyTuning(base, cfg)
 	delta := Delta{
 		HP:          tuned.HP - base.HP,
@@ -481,30 +456,20 @@ func handleTune(c *gin.Context) {
 
 // GET /api/garage/search?q=ferrari
 func handleSearch(c *gin.Context) {
-	q := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	q := normaliseKey(c.Query("q"))
 	if q == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "q is required"})
 		return
 	}
-	raw, err := cqFetch(map[string]string{"cmd": "getMakes"})
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-		return
-	}
-	var cqResp CQMakesResponse
-	if err := json.Unmarshal(raw, &cqResp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "parse error"})
-		return
-	}
 	type Result struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Country string `json:"country"`
+		Make  string `json:"make"`
+		Model string `json:"model"`
+		Year  int    `json:"year"`
 	}
 	var results []Result
-	for _, m := range cqResp.Makes {
-		if strings.Contains(strings.ToLower(m.MakeDisplay), q) || strings.Contains(strings.ToLower(m.MakeID), q) {
-			results = append(results, Result{ID: m.MakeID, Name: m.MakeDisplay, Country: m.MakeCountry})
+	for k := range vehicleDB {
+		if strings.Contains(k.Make, q) || strings.Contains(k.Model, q) {
+			results = append(results, Result{Make: k.Make, Model: k.Model, Year: k.Year})
 			if len(results) >= 10 {
 				break
 			}
@@ -513,37 +478,16 @@ func handleSearch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"results": results})
 }
 
-// ── Router setup (call this from your main.go) ────────────────────────────────
-// If you have an existing router, import this and call RegisterGarageRoutes(r)
+// ── Router setup ──────────────────────────────────────────────────────────────
 
 func RegisterGarageRoutes(r *gin.Engine) {
 	garage := r.Group("/api/garage")
 	{
 		garage.GET("/makes", handleMakes)
 		garage.GET("/models", handleModels)
-		garage.GET("/years", handleYears)
-		garage.GET("/trims", handleTrims)
 		garage.GET("/vehicle", handleVehicle)
 		garage.GET("/tuning-configs", handleTuningConfigs)
 		garage.POST("/tune", handleTune)
 		garage.GET("/search", handleSearch)
 	}
-}
-
-// ── Standalone entrypoint (remove if you have your own main.go) ───────────────
-
-func main() {
-	r := gin.Default()
-
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type"},
-		AllowCredentials: true,
-	}))
-
-	RegisterGarageRoutes(r)
-
-	fmt.Println("Garage API running on :8080")
-	r.Run(":8080")
 }

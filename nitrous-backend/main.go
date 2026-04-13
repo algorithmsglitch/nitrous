@@ -123,6 +123,12 @@ func main() {
 			orders.DELETE("/:id", middleware.AuthMiddleware(), handlers.CancelOrder)
 		}
 
+		// Passes
+		passes := api.Group("/passes")
+		{
+			passes.POST("/:id/purchase", middleware.AuthMiddleware(), handlers.PurchasePass)
+		}
+
 		// Auth
 		auth := api.Group("/auth")
 		{
@@ -131,6 +137,8 @@ func main() {
 			auth.GET("/me", middleware.AuthMiddleware(), handlers.GetCurrentUser)
 		}
 	}
+
+	handlers.RegisterGarageRoutes(r)
 
 	log.Println("🚀 Nitrous API server starting on :8080")
 	r.Run(":8080")

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Nav from '@/components/Nav'
 import styles from './passes.module.css'
+import { purchasePass } from '@/lib/api'
 
 // ── Static pass data (would come from API in production) ──────────────────────
 const PASSES = [
@@ -128,9 +129,15 @@ export default function PassesPage() {
       return
     }
     setPurchasing(passId)
-    await new Promise(r => setTimeout(r, 1200))
-    setPurchased(prev => new Set([...prev, passId]))
-    setPurchasing(null)
+    try {
+      await purchasePass(passId, token)
+      setPurchased(prev => new Set([...prev, passId]))
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Purchase failed'
+      alert(message)
+    } finally {
+      setPurchasing(null)
+    }
   }
 
   return (

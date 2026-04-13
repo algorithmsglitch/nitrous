@@ -56,7 +56,6 @@ interface CarEntry {
   category: string
   icon: string
   accentColor: string
-  // populated after API fetch
   spec?: VehicleSpec
 }
 
@@ -64,7 +63,6 @@ interface CarEntry {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
-// Hero cars shown in the sidebar. Specs are lazy-fetched from the Go backend.
 const HERO_CARS: CarEntry[] = [
   { make: 'Ferrari',     model: 'F40',         year: 1992, category: 'SUPERCAR', icon: '🏎️', accentColor: '#ff2a2a' },
   { make: 'Porsche',     model: '911 GT3 RS',  year: 2024, category: 'TRACK',    icon: '🔶', accentColor: '#fb923c' },
@@ -81,8 +79,6 @@ const TUNING_LABELS: Record<TuningKey, string> = {
   stock: 'STOCK', street: 'STREET', track: 'TRACK', race: 'RACE SPEC', drift: 'DRIFT',
 }
 
-// Client-side multipliers — mirrors Go backend, used for instant UI response
-// while the real tune POST resolves in the background.
 const LOCAL_TUNING: Record<TuningKey, TuningConfig> = {
   stock:  { label: 'Stock',     hpMult: 1.00, torqueMult: 1.00, topSpeedMult: 1.00, zeroMult: 1.00, weightMult: 1.00 },
   street: { label: 'Street',    hpMult: 1.08, torqueMult: 1.06, topSpeedMult: 1.04, zeroMult: 0.95, weightMult: 0.97 },
@@ -93,16 +89,24 @@ const LOCAL_TUNING: Record<TuningKey, TuningConfig> = {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-async function fetchVehicle(make: string, model: string, year: number): Promise<VehicleSpec | null> {
+async function fetchVehicle(make: string, model: string, year: number): Promise<{ spec: VehicleSpec | null; error: string | null }> {
   try {
-    const res = await fetch(
-      `${API_BASE}/api/garage/vehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&year=${year}`
-    )
-    if (!res.ok) return null
+    const url = `${API_BASE}/api/garage/vehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&year=${year}`
+    console.debug('[Garage] fetchVehicle →', url)
+
+    const res = await fetch(url)
     const data = await res.json()
-    return data.vehicle ?? null
-  } catch {
-    return null
+
+    if (!res.ok) {
+      // FIX: surface the error and hint from the backend instead of silently returning null
+      console.error('[Garage] fetchVehicle failed:', data)
+      return { spec: null, error: data.error ?? `HTTP ${res.status}` }
+    }
+
+    return { spec: data.vehicle ?? null, error: null }
+  } catch (err) {
+    console.error('[Garage] fetchVehicle exception:', err)
+    return { spec: null, error: 'Network error — is the Go backend running?' }
   }
 }
 
@@ -113,9 +117,14 @@ async function postTune(make: string, model: string, year: number, tuning: Tunin
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ make, model, year, tuning }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      console.error('[Garage] postTune failed:', data)
+      return null
+    }
     return await res.json()
-  } catch {
+  } catch (err) {
+    console.error('[Garage] postTune exception:', err)
     return null
   }
 }
@@ -154,13 +163,14 @@ function StatBar({ label, value, max, accent }: { label: string; value: number; 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function GaragePage() {
-  const [cars, setCars]           = useState<CarEntry[]>(HERO_CARS)
-  const [selected, setSelected]   = useState<CarEntry>(HERO_CARS[0])
-  const [spec, setSpec]           = useState<VehicleSpec | null>(null)
-  const [tuning, setTuning]       = useState<TuningKey>('stock')
+  const [cars, setCars]             = useState<CarEntry[]>(HERO_CARS)
+  const [selected, setSelected]     = useState<CarEntry>(HERO_CARS[0])
+  const [spec, setSpec]             = useState<VehicleSpec | null>(null)
+  const [specError, setSpecError]   = useState<string | null>(null)   // FIX: track fetch errors
+  const [tuning, setTuning]         = useState<TuningKey>('stock')
   const [tuneResult, setTuneResult] = useState<TuneResponse | null>(null)
   const [loadingSpec, setLoadingSpec] = useState(false)
-  const [search, setSearch]       = useState('')
+  const [search, setSearch]         = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scanRef   = useRef<number>(0)
   const rafRef    = useRef<number>(0)
@@ -171,12 +181,14 @@ export default function GaragePage() {
   useEffect(() => {
     let cancelled = false
     setSpec(null)
+    setSpecError(null)
     setTuneResult(null)
     setLoadingSpec(true)
 
-    fetchVehicle(selected.make, selected.model, selected.year).then(v => {
+    fetchVehicle(selected.make, selected.model, selected.year).then(({ spec: v, error }) => {
       if (cancelled) return
       setSpec(v)
+      setSpecError(error)
       setLoadingSpec(false)
     })
 
@@ -283,6 +295,13 @@ export default function GaragePage() {
         c.make.toLowerCase().includes(search.toLowerCase()) ||
         c.model.toLowerCase().includes(search.toLowerCase()))
     : cars
+
+  // ── Status line text ─────────────────────────────────────────────────────
+  const statusText = loadingSpec
+    ? 'FETCHING TELEMETRY…'
+    : specError
+      ? `DATA ERROR — ${specError.toUpperCase()}`
+      : `SYSTEM ONLINE — ${TUNING_LABELS[tuning]}`
 
   return (
     <>
@@ -406,9 +425,15 @@ export default function GaragePage() {
 
               {/* Status bar */}
               <div className={styles.hudBottom}>
-                <span className={styles.statusDot} style={{ background: accent, boxShadow: `0 0 6px ${accent}` }} />
-                <span style={{ color: accent }}>
-                  {loadingSpec ? 'FETCHING TELEMETRY…' : `SYSTEM ONLINE — ${TUNING_LABELS[tuning]}`}
+                <span
+                  className={styles.statusDot}
+                  style={{
+                    background: specError ? '#ff4444' : accent,
+                    boxShadow: `0 0 6px ${specError ? '#ff4444' : accent}`
+                  }}
+                />
+                <span style={{ color: specError ? '#ff4444' : accent }}>
+                  {statusText}
                 </span>
               </div>
             </div>
@@ -470,7 +495,6 @@ export default function GaragePage() {
               </div>
             </div>
 
-            {/* Delta panel — shown when tuned and backend returned exact delta */}
             {tuning !== 'stock' && spec && (
               <div className={styles.deltaPanel}>
                 <div className={styles.deltaPanelLabel}>
@@ -503,7 +527,7 @@ export default function GaragePage() {
             )}
 
             <div className={styles.apiNote}>
-              Data via <a href="https://www.carqueryapi.com" target="_blank" rel="noreferrer">CarQuery API</a>
+              Data via <a href="https://vpic.nhtsa.dot.gov/api/" target="_blank" rel="noreferrer">NHTSA vPIC</a>
             </div>
           </div>
 
