@@ -42,6 +42,19 @@ func main() {
 	// API routes
 	api := r.Group("/api")
 	{
+		// Garage
+		garage := api.Group("/garage")
+		{
+			garage.GET("/makes", handlers.GetGarageMakes)
+			garage.GET("/models", handlers.GetGarageModels)
+			garage.GET("/years", handlers.GetGarageYears)
+			garage.GET("/trims", handlers.GetGarageTrims)
+			garage.GET("/vehicle", handlers.GetGarageVehicle)
+			garage.GET("/tuning-configs", handlers.GetGarageTuningConfigs)
+			garage.POST("/tune", handlers.PostGarageTune)
+			garage.GET("/search", handlers.GetGarageSearch)
+		}
+
 		// Events
 		events := api.Group("/events")
 		{
@@ -137,8 +150,6 @@ func main() {
 			auth.GET("/me", middleware.AuthMiddleware(), handlers.GetCurrentUser)
 		}
 	}
-
-	handlers.RegisterGarageRoutes(r)
 
 	log.Println("🚀 Nitrous API server starting on :8080")
 	r.Run(":8080")
