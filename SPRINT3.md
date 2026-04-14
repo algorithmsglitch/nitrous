@@ -76,6 +76,7 @@ Current backend test files:
 - `nitrous-backend/handlers/auth_handlers_test.go`
 - `nitrous-backend/handlers/admin_management_test.go`
 - `nitrous-backend/handlers/events_mutations_test.go`
+- `nitrous-backend/handlers/garage_passes_test.go`
 - `nitrous-backend/handlers/handlers_test.go`
 - `nitrous-backend/handlers/journeys_teams_test.go`
 - `nitrous-backend/handlers/orders_reminders_test.go`
@@ -127,6 +128,12 @@ Current backend test files:
 - `TestSetReminderEndpoint`
 - `TestGetMyRemindersEndpoint`
 - `TestDeleteReminderEndpoint`
+
+#### Sprint 3 New Functionality Tests
+- `TestGetGarageYearsReturnsActualRange`
+- `TestGetGarageVehicleReturnsSpec`
+- `TestPostGarageTuneAppliesConfig`
+- `TestPurchasePassEndpoint`
 
 Run command:
 

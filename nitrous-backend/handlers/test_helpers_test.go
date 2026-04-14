@@ -27,6 +27,8 @@ func setupHandlersTestEnv() {
 	database.Teams = nil
 	database.Reminders = nil
 	database.Orders = nil
+	database.Passes = nil
+	database.PassPurchases = nil
 }
 
 func makeToken(t *testing.T, userID string) string {
